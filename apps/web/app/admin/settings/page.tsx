@@ -315,7 +315,7 @@ export default function SettingsPage() {
           <Field label="มาสายได้ไม่เกิน (นาที)" hint="เลยจากนี้ QR ใช้ไม่ได้ และยึดมัดจำ">
             <input className="field num" type="number" inputMode="numeric" min={0} max={1000} step={1} required disabled={ro} value={form.lateGraceMin} onChange={set('lateGraceMin')} />
           </Field>
-          <Field label="พร้อมเพย์สำหรับรับมัดจำ" hint="เบอร์มือถือหรือเลขบัตรประชาชน" className="sm:col-span-3">
+          <Field label="เลขพร้อมเพย์ของร้าน" hint="เบอร์มือถือหรือเลขบัตรประชาชน ใช้กับ QR มัดจำและ QR ตอนปิดโต๊ะ" className="sm:col-span-3">
             <input className="field num" inputMode="numeric" disabled={ro} value={form.promptpayId} onChange={set('promptpayId')} />
           </Field>
         </div>
