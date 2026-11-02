@@ -1,0 +1,13 @@
+node_modules
+dist
+.next
+*.db
+*.db-journal
+.env
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
+.pio
+.venv
+*.db-shm
+*.db-wal
+*.tsbuildinfo

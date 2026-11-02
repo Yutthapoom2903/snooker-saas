@@ -1,0 +1,23 @@
+{
+  "name": "snooker-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Terminal simulator of the ESP32 snooker table device (docs/mqtt-contract.md)",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "sim": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.1",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}

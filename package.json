@@ -1,0 +1,12 @@
+{
+  "name": "snooker-saas",
+  "private": true,
+  "workspaces": ["apps/api", "apps/web", "hardware/simulator"],
+  "scripts": {
+    "dev": "npm run dev --workspace apps/api & npm run dev --workspace apps/web & wait",
+    "dev:api": "npm run dev --workspace apps/api",
+    "dev:web": "npm run dev --workspace apps/web",
+    "sim": "npm run start --workspace hardware/simulator --",
+    "db:reset": "npm run db:reset --workspace apps/api"
+  }
+}

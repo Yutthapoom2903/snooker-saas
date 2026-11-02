@@ -1,0 +1,352 @@
+// Snooker SaaS — multi-tenant schema.
+// Every tenant-owned row carries shopId. Money is whole Thai baht (Int).
+// Written to stay portable: switching to PostgreSQL later = change provider + db push.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PLATFORM_ADMIN
+  SHOP_OWNER
+  SHOP_STAFF
+}
+
+enum SessionStatus {
+  RUNNING
+  PAUSED
+  CLOSED
+}
+
+enum BookingStatus {
+  DRAFT             // form submitted on the web, LINE user not linked yet
+  PENDING_DEPOSIT   // linked to LINE, waiting for the deposit slip
+  DEPOSIT_SUBMITTED // slip uploaded, waiting for admin confirm
+  CONFIRMED         // admin confirmed, QR issued
+  CHECKED_IN        // QR scanned at the shop, session opened
+  NO_SHOW           // QR window passed, deposit forfeited
+  REJECTED
+  CANCELLED
+  EXPIRED           // draft / pending deposit never completed
+}
+
+enum PaymentType {
+  TABLE      // charge collected at checkout
+  DEPOSIT    // booking deposit received
+  MEMBERSHIP
+  REFUND     // negative amount
+}
+
+enum PaymentMethod {
+  CASH
+  PROMPTPAY
+  TRANSFER
+  CARD
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+model Shop {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  logoUrl   String?
+  phone     String?
+  address   String?
+  openTime  String   @default("10:00") // HH:mm local
+  closeTime String   @default("02:00") // may be past midnight
+  open24h   Boolean  @default(false)   // ignores openTime/closeTime
+  active    Boolean  @default(true)
+
+  promptpayId String? // phone or national id for deposit QR
+  depositAmount Int   @default(50)
+  lateGraceMin  Int   @default(15)  // QR dies this many minutes after booking start
+  earlyCheckinMin Int @default(30)  // QR usable this many minutes before start
+  bookingHorizonDays Int @default(14) // how far ahead customers may book
+  closedWeekdays String @default("")  // "1,2" = closed Mon & Tue (0=Sunday); business days
+  closedDates    String @default("")  // "2026-12-31,2027-01-01" one-off closures (business days)
+
+  // billing rules
+  roundingMin Int @default(15)
+  minimumMin  Int @default(30)
+
+  // LINE OA (per shop). Empty = mock mode.
+  lineChannelId     String?
+  lineChannelSecret String?
+  lineAccessToken   String?
+  lineLoginChannelId String? // LIFF belongs to a LINE Login channel
+  lineLiffId        String?
+  lineOaBasicId     String? // e.g. @123abcd — used for add-friend link
+  lineAdminTargetId String? // groupId/userId that receives confirm cards
+  lineLastSeenGroupId String? // captured from webhook join events, to help setup
+  lineOwnerTargetId String?   // owner's own LINE userId for escalations (optional)
+
+  // Automatic slip verification. "none" = staff check slips by eye.
+  slipProvider       String  @default("none") // none | easyslip | slipok
+  slipApiKey         String?
+  slipOkBranchId     String?
+  slipReceiverAccounts String @default("") // extra bank account numbers that may receive deposits
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  tables      SnookerTable[]
+  devices     Device[]
+  sessions    TableSession[]
+  bookings    Booking[]
+  customers   Customer[]
+  plans       MembershipPlan[]
+  memberships Membership[]
+  campaigns   Campaign[]
+  payments    Payment[]
+  lineOutbox  LineOutbox[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  shopId       String?  // null for PLATFORM_ADMIN
+  shop         Shop?    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+model SnookerTable {
+  id           String   @id @default(cuid())
+  shopId       String
+  shop         Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name         String   // "โต๊ะ 1"
+  label        String   // short label for the device display, ≤4 chars: "T1"
+  sortOrder    Int      @default(0)
+  pricePerHour Int
+  bookable     Boolean  @default(true)
+  active       Boolean  @default(true)
+  streamUrl    String?  // P2: camera stream
+  createdAt    DateTime @default(now())
+
+  device   Device?
+  sessions TableSession[]
+  bookings Booking[]
+
+  @@unique([shopId, label])
+  @@index([shopId])
+}
+
+model Device {
+  id          String    @id // deviceId used as MQTT clientId/username
+  shopId      String
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  secretHash  String
+  name        String
+  tableId     String?   @unique
+  table       SnookerTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  online      Boolean   @default(false)
+  lastSeenAt  DateTime?
+  fwVersion   String?
+  ip          String?
+  rssi        Int?
+  scoreJson   String?   // last score state from the board
+  createdAt   DateTime  @default(now())
+
+  @@index([shopId])
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String?
+  lineUserId  String?
+  lineName    String?
+  createdAt   DateTime @default(now())
+
+  bookings    Booking[]
+  memberships Membership[]
+  sessions    TableSession[]
+
+  @@unique([shopId, lineUserId])
+  @@index([shopId, phone])
+}
+
+model TableSession {
+  id          String        @id @default(cuid())
+  shopId      String
+  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  tableId     String
+  table       SnookerTable  @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  customerId  String?
+  customer    Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName String?
+  bookingId   String?       @unique
+  booking     Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  status      SessionStatus @default(RUNNING)
+  startedAt   DateTime      @default(now())
+  endedAt     DateTime?
+  pausedAt    DateTime?     // set while PAUSED
+  pausedMs    Int           @default(0) // accumulated paused time
+
+  // price snapshot taken when the session opens; discount candidates
+  // (member plan + campaigns valid at open time) as JSON. Checkout applies the
+  // single candidate that saves the most — discounts never stack.
+  pricePerHour  Int
+  discountsJson String  @default("[]")
+  discountLabel String? // the candidate chosen at checkout
+
+  // filled at checkout
+  billedMinutes  Int?
+  grossAmount    Int?
+  discountAmount Int?
+  depositApplied Int?
+  netAmount      Int?   // collected at checkout = gross - discount - deposit (≥0)
+  paymentMethod  PaymentMethod?
+  openedById     String?
+  closedById     String?
+
+  payments Payment[]
+
+  @@index([shopId, startedAt])
+  @@index([tableId, status])
+}
+
+model Booking {
+  id           String        @id @default(cuid())
+  shopId       String
+  shop         Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  code         String        // short human code, e.g. "B7K2QX"
+  publicToken  String        @unique // for the customer ticket page URL
+  tableId      String
+  table        SnookerTable  @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  customerId   String?
+  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  name         String
+  phone        String
+  partySize    Int           @default(2)
+  note         String?
+  startAt      DateTime
+  endAt        DateTime
+  status       BookingStatus @default(DRAFT)
+  depositAmount Int
+  depositForfeited Boolean   @default(false)
+  slipUrl      String?
+  slipRef      String?       @unique // bank transaction ref read from the slip QR; one slip, one booking
+  slipCheck    String?       // JSON: { verdict, provider, reasons[], amount, at }
+  submittedAt  DateTime?     // slip uploaded
+  remindedAt   DateTime?     // staff re-notified about a slip waiting too long
+  lineUserId   String?
+  confirmedAt  DateTime?
+  confirmedBy  String?       // user id or "line:<userId>"
+  checkedInAt  DateTime?
+  rejectReason String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  session  TableSession?
+  payments Payment[]
+
+  @@unique([shopId, code])
+  @@index([shopId, startAt])
+  @@index([tableId, startAt])
+  @@index([status])
+}
+
+model MembershipPlan {
+  id             String   @id @default(cuid())
+  shopId         String
+  shop           Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name           String
+  price          Int
+  durationDays   Int
+  discountPercent Int     // discount on table time
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  memberships Membership[]
+}
+
+model Membership {
+  id         String         @id @default(cuid())
+  shopId     String
+  shop       Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  planId     String
+  plan       MembershipPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  startsAt   DateTime
+  endsAt     DateTime
+  pricePaid  Int
+  createdAt  DateTime       @default(now())
+
+  payments Payment[]
+
+  @@index([shopId, customerId])
+}
+
+model Campaign {
+  id          String       @id @default(cuid())
+  shopId      String
+  shop        Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  type        DiscountType
+  value       Int          // percent (1-100) or baht
+  startDate   DateTime     // inclusive, local day start
+  endDate     DateTime     // inclusive, local day end
+  daysOfWeek  String       @default("0,1,2,3,4,5,6") // 0=Sunday, comma list
+  timeFrom    String?      // HH:mm, null = all day
+  timeTo      String?
+  tableIds    String?      // comma list, null = all tables
+  membersOnly Boolean      @default(false)
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  shopId       String
+  shop         Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type         PaymentType
+  method       PaymentMethod
+  amount       Int           // negative for REFUND
+  sessionId    String?
+  session      TableSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  bookingId    String?
+  booking      Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  membershipId String?
+  membership   Membership?   @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  note         String?
+  createdById  String?
+  createdAt    DateTime      @default(now())
+
+  @@index([shopId, createdAt])
+}
+
+// Every LINE message the system sends. In mock mode this is the only place
+// they go (shown in Admin → LINE inbox); in live mode it is an audit log.
+model LineOutbox {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  to        String   // LINE userId / groupId, or "admin" / "customer:<bookingId>" in mock
+  audience  String   // CUSTOMER | ADMIN
+  altText   String
+  payload   String   // JSON message array
+  bookingId String?
+  mock      Boolean
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([shopId, createdAt])
+}

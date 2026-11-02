@@ -1,0 +1,170 @@
+@import 'tailwindcss';
+
+/* Snooker hall tokens. Green + white, gradient only as the room's light. */
+@theme {
+  --color-baize: #0e6b43;
+  --color-baize-deep: #0a4f32;
+  --color-felt: #1e8c5a;
+  --color-mist: #eaf5ef;
+  --color-mist-2: #d6ebe0;
+  --color-line: #cfe2d7;
+  --color-ink: #14261c;
+  --color-ink-soft: #4f6458;
+  --color-ink-mute: #7d8f85;
+  --color-rail: #6e4326;
+  --color-ball-yellow: #d49a1f;
+  --color-ball-red: #b3261e;
+
+  --font-sans: 'Anuphan', system-ui, sans-serif;
+  --font-display: 'Chakra Petch', 'Anuphan', system-ui, sans-serif;
+
+  --radius-pill: 999px;
+}
+
+@layer base {
+  html {
+    color: var(--color-ink);
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    min-height: 100dvh;
+    background: #fff;
+    font-family: var(--font-sans);
+    font-feature-settings: 'tnum' 0;
+    line-height: 1.6;
+  }
+  /* The room: white at the top, fading into pale baize like light falling off a table lamp. */
+  .room {
+    background:
+      radial-gradient(1200px 520px at 50% -180px, #ffffff 30%, transparent 70%),
+      linear-gradient(180deg, #ffffff 0%, var(--color-mist) 55%, #dcefe4 100%);
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-felt);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  .num {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+  }
+  input, select, textarea, button { font: inherit; }
+  @media (hover: none) {
+    input, select, textarea { font-size: 16px; }
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-ink outline-none transition-[border-color,box-shadow] duration-150;
+  }
+  .field:focus { @apply border-felt; box-shadow: 0 0 0 3px rgb(30 140 90 / 0.15); }
+  .field:disabled { @apply bg-mist text-ink-mute; }
+  .label { @apply mb-1 block text-sm text-ink-soft; }
+  .hairline { @apply border-line; }
+  .data-table { @apply w-full text-sm; }
+  .data-table th { @apply border-b border-line px-3 py-2 text-left font-normal text-ink-mute; }
+  .data-table td { @apply border-b border-line/70 px-3 py-2.5 align-middle; }
+  .data-table tr:last-child td { @apply border-b-0; }
+}
+
+
+/* ───────────── Motion ─────────────
+   Strong curves only; transform/opacity only; every block has a reduced-motion answer below. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Table lamp = table status. Lamp switches on in 260ms, dims to 45% on pause. */
+.table-art .baize { fill: #0f5c3a; transition: fill 200ms ease; }
+.table-art .baize-bed { fill: #167a4c; transition: fill 200ms ease; }
+.table-art .lamp { opacity: 0; transition: opacity 260ms var(--ease-out); }
+.table-art[data-state='free'] .baize { fill: #2f5a45; }
+.table-art[data-state='free'] .baize-bed { fill: #3d6e55; }
+.table-art[data-state='reserved'] .baize-bed { fill: #2f6f4e; }
+.table-art[data-state='playing'] .lamp { opacity: 1; }
+.table-art[data-state='paused'] .lamp { opacity: 0.45; }
+.table-art .balls,
+.table-art .reserved-ball {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+  @starting-style { opacity: 0; transform: scale(0.9); }
+}
+
+/* Press feedback, 120ms. */
+.press { transition-property: color, background-color, border-color, transform; transition-duration: 150ms, 150ms, 150ms, 120ms; transition-timing-function: ease, ease, ease, var(--ease-out); }
+.press:active:not(:disabled) { transform: scale(0.97); }
+
+/* Toast: transition-based entry so rapid toasts retarget instead of restarting. */
+.toast-in {
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(8px); }
+}
+
+/* Modal (native <dialog>): centered, so no anchored origin. In 220ms, out 150ms. */
+dialog.modal {
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out), overlay 150ms allow-discrete, display 150ms allow-discrete;
+}
+dialog.modal[open] {
+  opacity: 1;
+  transform: none;
+  transition-duration: 220ms;
+  @starting-style { opacity: 0; transform: scale(0.96); }
+}
+dialog.modal::backdrop { opacity: 0; transition: opacity 150ms ease, overlay 150ms allow-discrete, display 150ms allow-discrete; }
+dialog.modal[open]::backdrop { opacity: 1; @starting-style { opacity: 0; } }
+
+/* Segmented choice (close-table payment): the thumb slides to the pick; the panel under it crossfades. */
+.seg-thumb { transition: transform 200ms var(--ease-out); }
+.swap-in {
+  transition: opacity 150ms var(--ease-out);
+  @starting-style { opacity: 0; }
+}
+
+/* Check-in result: card settles in, the tick draws itself after it. */
+.result-in {
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  @starting-style { opacity: 0; transform: scale(0.96); }
+}
+.check-draw { stroke-dasharray: 24; stroke-dashoffset: 0; animation: check-draw 280ms var(--ease-out) 90ms backwards; }
+@keyframes check-draw { from { stroke-dashoffset: 24; } }
+
+/* Admin drawer (mobile): iOS drawer curve; the scrim fades with it. */
+.drawer { transition: transform 300ms var(--ease-drawer); }
+@media (min-width: 1024px) { .drawer { transition: none; } }
+#admin-nav + button { transition: opacity 200ms ease; @starting-style { opacity: 0; } }
+
+/* Waiting for the shop / active camera: slow breathing, the only ambient motion in the app. */
+.wait-dot { animation: breathe 1.6s ease-in-out infinite; }
+.scan-frame { animation: breathe 1.8s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: 0.35; } }
+
+/* Chart hover. */
+.bar { transition: fill 120ms ease; }
+
+.sidebar {
+  background:
+    radial-gradient(420px 260px at 0% 0%, rgb(255 255 255 / 0.08), transparent 70%),
+    linear-gradient(180deg, var(--color-baize) 0%, var(--color-baize-deep) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the lamp's opacity change (it carries meaning); drop movement and loops. */
+  .table-art .balls, .table-art .reserved-ball { @starting-style { transform: none; } }
+  .toast-in, .result-in { @starting-style { transform: none; } }
+  dialog.modal, dialog.modal[open] { transform: none; @starting-style { transform: none; } }
+  .press:active:not(:disabled) { transform: none; }
+  .wait-dot, .scan-frame, .check-draw { animation: none; }
+  .drawer { transition: none; }
+  .seg-thumb { transition: none; }
+}
