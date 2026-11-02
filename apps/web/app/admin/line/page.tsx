@@ -107,8 +107,8 @@ export default function LineInbox() {
       ) : rows.length === 0 ? (
         <Empty title="ยังไม่มีข้อความ">ลองจองโต๊ะจากหน้าเว็บของร้าน ข้อความถึงลูกค้าและถึงกลุ่มพนักงานจะขึ้นที่นี่</Empty>
       ) : (
-        <div className="grid overflow-hidden rounded-2xl border border-line bg-white lg:h-[calc(100dvh-11rem)] lg:min-h-[30rem] lg:grid-cols-[20rem_minmax(0,1fr)]">
-          <nav aria-label="การจอง" className={`overflow-y-auto border-line lg:block lg:border-r ${phoneThread ? 'hidden' : ''}`}>
+        <div className="grid overflow-hidden rounded-2xl border border-line bg-white lg:h-[calc(100dvh-11rem)] lg:min-h-[30rem] lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+          <nav aria-label="การจอง" className={`min-h-0 overflow-y-auto border-line lg:block lg:border-r ${phoneThread ? 'hidden' : ''}`}>
             {threads.map((t, i) => {
               const newDay = i === 0 || dayKey(threads[i - 1].last) !== dayKey(t.last);
               const st = t.booking ? BOOKING_STATUS[t.booking.status] : null;
@@ -147,7 +147,7 @@ export default function LineInbox() {
           </nav>
 
           {current && (
-            <section aria-label={current.booking ? `การจอง ${current.booking.code}` : 'ข้อความทั่วไป'} className={`min-w-0 flex-col lg:flex ${phoneThread ? 'flex' : 'hidden'}`}>
+            <section aria-label={current.booking ? `การจอง ${current.booking.code}` : 'ข้อความทั่วไป'} className={`min-h-0 min-w-0 flex-col lg:flex ${phoneThread ? 'flex' : 'hidden'}`}>
               <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-3 sm:px-5">
                 <button type="button" onClick={() => setPhoneThread(false)} className="-ml-1 rounded-md px-1 py-0.5 text-sm text-baize lg:hidden">ทุกการจอง</button>
                 {current.booking ? (
@@ -163,7 +163,7 @@ export default function LineInbox() {
                   <span className="font-medium">ข้อความทั่วไป</span>
                 )}
               </header>
-              <ol className="flex-1 space-y-5 overflow-y-auto bg-mist/40 px-4 py-5 sm:px-6">
+              <ol className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-mist/40 px-4 py-5 sm:px-6">
                 {current.rows.map((r) => {
                   const msgs = JSON.parse(r.payload) as ({ type: 'text'; text: string } | { type: 'flex'; contents: Node })[];
                   const toAdmin = r.audience === 'ADMIN';
